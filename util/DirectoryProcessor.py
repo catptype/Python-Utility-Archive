@@ -162,3 +162,22 @@ class DirectoryProcessor:
             os.rename(old_name, new_name)
         except Exception as e:
             print(f"Error while renaming file: {e}")
+
+
+
+
+
+
+import os
+from util.DirectoryProcessor import DirectoryProcessor
+
+TARGET_DIR = r"J:\(成年コミック)\4bit"
+
+path_list = DirectoryProcessor.get_only_files(TARGET_DIR, ['.cbz', '.zip'])
+name_list = [DirectoryProcessor.decompose_path(path)[1] for path in path_list]
+count = { name:name_list.count(name) for name in name_list if name_list.count(name) > 1}
+move_list = [path for path in path_list if DirectoryProcessor.decompose_path(path)[1] in list(count.keys())]
+for src in move_list:
+    dir, filename = DirectoryProcessor.path_up(src)
+    dst = os.path.join(dir, "DUPLICATE", filename)
+    DirectoryProcessor.move_file(src,dst)
