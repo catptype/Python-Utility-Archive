@@ -1,6 +1,7 @@
 import base64
 import cv2
 import numpy as np
+import pandas as pd
 from io import BytesIO
 from PIL import Image
 from typing import Tuple, Union
@@ -155,3 +156,14 @@ class Converter:
         x = keypoint[0] * image_width
         y = keypoint[1] * image_height
         return x, y
+    
+    ### Excel to CSV
+    @staticmethod
+    def xlsx_to_csv(input_file:str, output_file:str) -> None:
+        # Read the Excel file
+        df = pd.read_excel(input_file)
+        
+        # Save it as a CSV file
+        df.to_csv(output_file, index=False)
+        print(f"File converted successfully and saved as {output_file}")
+    
