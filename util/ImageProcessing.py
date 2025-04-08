@@ -388,6 +388,51 @@ class CvImageProcessing:
         return laplacian
     
     @staticmethod
+    def detect_blur_fft(image:np.ndarray, size=40):
+        """
+        Detects blur in an image using FFT.
+        
+        Parameters:
+        - image: Input image (BGR or grayscale)
+        - size: Size of the center square to zero-out low frequencies
+        - thresh: Threshold for magnitude mean to consider image sharp
+        
+        Returns:
+        - is_blurry: True if image is blurry
+        - mean_val: Mean magnitude of high frequencies
+
+        **Note**
+        Too small size: might not suppress enough low frequencies, leading to noisy high-freq signal.
+        Too large size: could suppress useful edge info, especially in already blurred images.
+        Usually, mean_val < 10 most likely blur image
+        """
+        # Convert to grayscale if image is in color
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+        
+        # FFT
+        fft = np.fft.fft2(gray)
+        fft_shift = np.fft.fftshift(fft)
+
+        # Zero out the low frequencies in the center
+        h, w = gray.shape
+        cX, cY = w // 2, h // 2
+        fft_shift[cY-size:cY+size, cX-size:cX+size] = 0
+
+        # Inverse FFT
+        fft_shift = np.fft.ifftshift(fft_shift)
+        reconstructed = np.fft.ifft2(fft_shift)
+        magnitude = np.abs(reconstructed)
+
+        # Calculate mean of the magnitude spectrum
+        mean_val = np.mean(magnitude)
+        # is_blurry = mean_val < thresh
+        
+        return mean_val
+    
+    @staticmethod
     def calculate_noise(image:np.ndarray, color:bool=False, average_sigmas:bool=True) -> float:
         """
         High value means low noise
