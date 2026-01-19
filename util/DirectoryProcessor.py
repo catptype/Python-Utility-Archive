@@ -1,43 +1,139 @@
 import os
+import re
 import shutil
 from typing import List, Tuple
-
 
 class DirectoryProcessor:
     """A utility class for processing directories and files."""
 
     @staticmethod
-    def show_structure(target_dir: str, padding: str = '') -> None:
-        """
-        Recursively displays the directory structure in a tree format.
-        """
+    def remove_file(path: str) -> bool:
         try:
-            dirs = sorted(os.listdir(target_dir))
-            for dir_entry in dirs:
-                file_path = os.path.join(target_dir, dir_entry)
-                print(f"{padding}├── {dir_entry}")
-                if os.path.isdir(file_path):
-                    DirectoryProcessor.show_structure(file_path, padding + '│   ')
-        except Exception as e:
-            print(f"Error while showing structure: {e}")
-
+            os.remove(path)
+            return True
+        except OSError as e:
+            print(f"Error: {path} : {e.strerror}")
+            return False
+    
     @staticmethod
-    def show_structure_with_count(target_dir: str, padding: str = '') -> None:
-        """
-        Recursively displays the directory structure in a tree format
-        with a count of files in each subdirectory.
-        """
+    def remove_dir(path: str) -> bool:
+        """Removes a directory. Use shutil.rmtree for recursive delete."""
         try:
-            dirs = sorted(os.listdir(target_dir))
-            for dir_entry in dirs:
-                file_path = os.path.join(target_dir, dir_entry)
-                if os.path.isdir(file_path):
-                    sub_files = [f for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))]
-                    num_files = len(sub_files)
-                    print(f"{padding}├── {dir_entry} \t ({num_files} files)")
-                    DirectoryProcessor.show_structure_with_count(file_path, padding + '│   ')
+            shutil.rmtree(path)
+            return True
+        except OSError as e:
+            print(f"Error: {path} : {e.strerror}")
+            return False
+    
+    @staticmethod
+    def remove_empty_dirs(target_dir: str) -> None:
+        """Recursively removes empty subdirectories."""
+        for root, dirs, files in os.walk(target_dir, topdown=False):
+            for name in dirs:
+                try:
+                    os.rmdir(os.path.join(root, name))
+                except OSError:
+                    # Directory not empty
+                    pass
+        
+    @staticmethod
+    def show_structure(
+        target_dir: str, 
+        padding: str = '', 
+        depth: int = 0, 
+        max_depth: int = 3, 
+        max_dirs: int = 10, 
+        max_files: int = 10, 
+        show_counts: bool = False,   # <--- New toggle
+        exclude_dirs: List[str] = None
+    ) -> None:
+        """
+        Unified directory tree viewer.
+        
+        Args:
+            max_files: Set to 0 to hide filenames entirely (folder-only view).
+            show_counts: If True, calculates and displays file counts next to folder names.
+        """
+        if exclude_dirs is None:
+            exclude_dirs = ['.git', '__pycache__', 'node_modules', 'venv', '.idea', '__MACOSX']
+
+        if depth > max_depth:
+            return
+
+        try:
+            # 1. Gather and Sort Items
+            try:
+                items = os.listdir(target_dir)
+            except PermissionError:
+                print(f"{padding}├── 🔒 [Access Denied]")
+                return
+
+            dirs = []
+            files = []
+            for item in items:
+                if item in exclude_dirs: continue
+                # We use full path to check isdir/isfile safely
+                full_path = os.path.join(target_dir, item)
+                if os.path.isdir(full_path):
+                    dirs.append(item)
+                else:
+                    files.append(item)
+            
+            dirs.sort()
+            files.sort()
+
+            # 2. Process Directories
+            displayed_dirs = dirs[:max_dirs]
+            remaining_dirs = len(dirs) - max_dirs
+
+            for d in displayed_dirs:
+                # OPTIONAL: Peek ahead to count files in the subdirectory
+                count_info = ""
+                if show_counts:
+                    try:
+                        sub_path = os.path.join(target_dir, d)
+                        # Fast list comprehension to count files only
+                        n_files = len([name for name in os.listdir(sub_path) 
+                                     if os.path.isfile(os.path.join(sub_path, name))])
+                        count_info = f" ({n_files} files)"
+                    except (PermissionError, OSError):
+                        count_info = " (?)"
+
+                print(f"{padding}├── 📁 {d}{count_info}")
+
+                # Recurse
+                DirectoryProcessor.show_structure(
+                    os.path.join(target_dir, d), 
+                    padding + '│   ', 
+                    depth + 1, 
+                    max_depth, 
+                    max_dirs, 
+                    max_files, 
+                    show_counts,
+                    exclude_dirs
+                )
+            
+            if remaining_dirs > 0:
+                print(f"{padding}├── ... {remaining_dirs} more folders")
+
+            # 3. Process Files
+            # If max_files is 0, we skip listing them, but we can show a summary if files exist.
+            if max_files == 0:
+                if len(files) > 0 and depth == 0:
+                    # Print a single summary line for the hidden files
+                    print(f"{padding}└── 📄 ({len(files)} files)")
+            else:
+                displayed_files = files[:max_files]
+                remaining_files = len(files) - max_files
+
+                for f in displayed_files:
+                    print(f"{padding}├── 📄 {f}")
+                
+                if remaining_files > 0:
+                    print(f"{padding}└── ... {remaining_files} more files")
+
         except Exception as e:
-            print(f"Error while showing structure with count: {e}")
+            print(f"Error processing {target_dir}: {e}")
 
     @staticmethod
     def get_dir(target_dir: str) -> List[str]:
@@ -100,6 +196,19 @@ class DirectoryProcessor:
         except Exception as e:
             print(f"Error while getting files with extensions: {e}")
             return []
+    
+    @staticmethod
+    def get_files_by_pattern(target_dir: str, pattern: str) -> List[str]:
+        """Returns files matching a regex pattern."""
+        res = []
+        try:
+            regex = re.compile(pattern)
+            for file in os.listdir(target_dir):
+                if os.path.isfile(os.path.join(target_dir, file)) and regex.match(file):
+                    res.append(os.path.join(target_dir, file))
+        except Exception as e:
+            print(f"Error: {e}")
+        return res
 
     @staticmethod
     def decompose_path(path: str) -> Tuple[str, str, str]:
@@ -130,14 +239,18 @@ class DirectoryProcessor:
             print(f"Error while creating directory: {e}")
 
     @staticmethod
-    def move_file(source: str, destination: str) -> None:
+    def move_file(source: str, destination: str, overwrite: bool = False) -> None:
         """
         Moves a file from source to destination.
         Creates destination directory if it does not exist.
         """
         try:
             os.makedirs(os.path.dirname(destination), exist_ok=True)
+            if os.path.exists(destination) and not overwrite:
+                print(f"Skipped: '{destination}' already exists (overwrite=False).")
+                return
             shutil.move(source, destination)
+            
         except Exception as e:
             print(f"Error while moving file: {e}")
 
