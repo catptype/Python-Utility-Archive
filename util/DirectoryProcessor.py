@@ -45,7 +45,6 @@ class DirectoryProcessor:
         max_dirs: int = 10, 
         max_files: int = 10, 
         show_counts: bool = False,   # <--- New toggle
-        exclude_dirs: List[str] = None
     ) -> None:
         """
         Unified directory tree viewer.
@@ -54,9 +53,6 @@ class DirectoryProcessor:
             max_files: Set to 0 to hide filenames entirely (folder-only view).
             show_counts: If True, calculates and displays file counts next to folder names.
         """
-        if exclude_dirs is None:
-            exclude_dirs = ['.git', '__pycache__', 'node_modules', 'venv', '.idea', '__MACOSX']
-
         if depth > max_depth:
             return
 
