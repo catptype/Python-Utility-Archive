@@ -14,8 +14,7 @@ class VideoStream:
         self.source = source
         self.name = name
         self.stopped = False
-        self._latest_frame = None
-        self._has_new_frame = False
+        self._frame = None
         
         # Threading Lock
         self.lock = threading.Lock()
@@ -40,7 +39,7 @@ class VideoStream:
         # 3. Read first frame to ensure validity
         ret, frame = self.cap.read()
         if ret:
-            self._latest_frame = frame
+            self._frame = frame
         else:
             print(f"[{self.name}] Warning: Source opened but returned no frame.")
 
@@ -69,8 +68,7 @@ class VideoStream:
 
             # MEMORY operation happens here (locked, extremely fast)
             with self.lock:
-                self._latest_frame = frame
-                self._has_new_frame = True
+                self._frame = frame
             
             # If playing a video file, we might want to sleep slightly to match FPS
             # Otherwise, the thread reads the whole file in 1 second.
@@ -85,11 +83,11 @@ class VideoStream:
         Returns: cv2.Mat or None if stream ended.
         """
         with self.lock:
-            if self._latest_frame is None:
+            if self._frame is None:
                 return None
             # Return a copy to ensure thread safety 
             # (prevents main thread from modifying image while update thread overwrites it)
-            return self._latest_frame.copy()
+            return self._frame.copy()
 
     @property
     def is_running(self) -> bool:
