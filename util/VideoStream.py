@@ -49,31 +49,43 @@ class VideoStream:
 
     def _update(self):
         """
-        Background thread loop. 
-        Crucial: cap.read() is done OUTSIDE the lock to prevent blocking.
+        Background thread loop.
+        Uses Delta Time calculation to ensure video files play at correct speed.
         """
+        # Pre-calculate target time per frame (e.g., 30 FPS = 0.0333s)
+        target_frame_time = 1.0 / self.fps if self.fps > 0 else 0
+
         while not self.stopped:
+            # 1. Start the timer for this iteration
+            start_time = time.perf_counter()
+
             if not self.cap.isOpened():
                 self.stop()
                 break
 
-            # BLOCKING I/O operation happens here (unlocked)
-            # This allows the main program to access self.frame even while the camera is reading.
+            # 2. Blocking I/O (Read frame)
             ret, frame = self.cap.read()
 
             if not ret:
-                # End of stream (video file finished or network lost)
                 self.stop()
                 break
 
-            # MEMORY operation happens here (locked, extremely fast)
+            # 3. Thread Safe Update
             with self.lock:
                 self._frame = frame
-            
-            # If playing a video file, we might want to sleep slightly to match FPS
-            # Otherwise, the thread reads the whole file in 1 second.
-            if self.total_frames > 0 and self.fps > 0:
-                time.sleep(1 / self.fps)
+
+            # 4. Smart Sleep (Synchronization)
+            # Only apply strict timing if it is a video file (total_frames > 0)
+            if self.total_frames > 0 and target_frame_time > 0:
+                
+                # Check how much time reading/locking actually took
+                elapsed_time = time.perf_counter() - start_time
+                
+                # Calculate remaining time needed to hit target FPS
+                time_to_wait = target_frame_time - elapsed_time
+
+                if time_to_wait > 0:
+                    time.sleep(time_to_wait)
 
     @property
     def frame(self) -> Optional[cv2.Mat]:
@@ -87,7 +99,7 @@ class VideoStream:
                 return None
             # Return a copy to ensure thread safety 
             # (prevents main thread from modifying image while update thread overwrites it)
-            return self._frame.copy()
+            return self._frame
 
     @property
     def is_running(self) -> bool:
